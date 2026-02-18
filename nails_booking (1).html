@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nails by Cecy - Prenotazioni</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<style>
+body{font-family:Poppins,sans-serif;background:#f7f1ee;margin:0;display:flex;justify-content:center}
+.container{max-width:1000px;width:100%;padding:20px}
+h1{text-align:center}
+.card{background:white;padding:20px;border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.08);margin-top:20px}
+.nails-img{max-width:260px;display:block;margin:0 auto 15px;border-radius:16px}
+
+.calendar{max-width:420px;margin:auto}
+.cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day-name{font-weight:600;text-align:center;font-size:14px}
+.day{padding:10px;border-radius:10px;text-align:center;cursor:pointer}
+.valid{background:#c7f3d0}
+.invalid{background:#eee;color:#aaa}
+.selected{outline:3px solid #333}
+
+.slots button{padding:12px 18px;margin:10px;border:none;border-radius:10px;cursor:pointer;font-size:16px}
+.available{background:#c7f3d0}
+.booked{background:#f5b5b5;cursor:not-allowed}
+
+form{display:flex;flex-direction:column;gap:12px;margin-top:15px}
+input,select{padding:10px;border-radius:8px;border:1px solid #ccc}
+.submit{background:#222;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer}
+.center{text-align:center}
+
+.admin{display:none}
+.booking-item{padding:10px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}
+.booking-actions button{margin-left:5px;padding:6px 10px;border:none;border-radius:6px;cursor:pointer}
+.edit{background:#ffe082}
+.delete{background:#ef9a9a}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>💅 Nails by Cecy</h1>
+
+<div class="card">
+<img src="nails.jpg" class="nails-img">
+<h2>Prenota il tuo appuntamento</h2>
+<p style="text-align:center;max-width:600px;margin:auto">Sto cercando modelle per aiutarmi a creare il book che servirà per l'esame di TPT. Eseguirò una ricostruzione unghie con le forme Square e Almond.</p>
+
+<div class="calendar">
+<div class="cal-header">
+<button onclick="changeMonth(-1)">◀</button>
+<h3 id="monthLabel"></h3>
+<button onclick="changeMonth(1)">▶</button>
+</div>
+<div class="cal-grid" id="calendar"></div>
+</div>
+
+<h3>Orari disponibili</h3>
+<div class="slots" id="slots"></div>
+
+<form id="form">
+<!-- Immagine esempio forme unghie -->
+<img src="unghie.png" alt="Esempio forme unghie Square e Almond" style="max-width:220px;display:block;margin:auto;border-radius:12px">
+<select id="shape" required>
+<option value="">Forma unghie</option>
+<option>Square</option>
+<option>Almond</option>
+</select>
+<input type="text" id="name" placeholder="Nome" required>
+<input type="email" id="email" placeholder="Email" required>
+<button class="submit">Conferma prenotazione</button>
+</form>
+
+<p class="center" id="msg"></p>
+</div>
+
+<div class="card">
+<h2>Admin</h2>
+<input type="password" id="adminPass" placeholder="Password admin">
+<button onclick="loginAdmin()">Accedi</button>
+<div class="admin" id="adminPanel">
+<h3>Prenotazioni</h3>
+<div id="bookingList"></div>
+</div>
+</div>
+
+</div>
+
+<script>
+(function(){emailjs.init("YOUR_PUBLIC_KEY");})();
+
+const ADMIN_PASSWORD="1234";
+
+const slotsByDay={
+6:["14:30","16:30"],
+0:["14:30","18:30"]
+};
+
+const today=new Date();
+const end=new Date(today.getFullYear(),4,31);
+
+let viewMonth=today.getMonth();
+let viewYear=today.getFullYear();
+let selectedDate=null;
+let selectedTime=null;
+
+let bookings=JSON.parse(localStorage.getItem("bookings")||"[]");
+
+const monthNames=["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+
+function save(){localStorage.setItem("bookings",JSON.stringify(bookings));}
+
+function renderCalendar(){
+const cal=document.getElementById("calendar");
+cal.innerHTML="";
+document.getElementById("monthLabel").textContent=monthNames[viewMonth]+" "+viewYear;
+
+["Do","Lu","Ma","Me","Gi","Ve","Sa"].forEach(d=>{
+let el=document.createElement("div");
+el.textContent=d;el.className="day-name";cal.appendChild(el);
+});
+
+const first=new Date(viewYear,viewMonth,1);
+for(let i=0;i<first.getDay();i++) cal.appendChild(document.createElement("div"));
+
+const days=new Date(viewYear,viewMonth+1,0).getDate();
+
+for(let d=1;d<=days;d++){
+const date=new Date(viewYear,viewMonth,d);
+const el=document.createElement("div");
+el.textContent=d;
+
+const valid=date>=today && date<=end && slotsByDay[date.getDay()];
+
+if(valid){
+el.className="day valid";
+el.onclick=()=>{selectedDate=date;renderCalendar();renderSlots();};
+if(selectedDate && date.toDateString()==selectedDate.toDateString()) el.classList.add("selected");
+}else el.className="day invalid";
+
+cal.appendChild(el);
+}
+}
+
+function changeMonth(d){viewMonth+=d;if(viewMonth<0){viewMonth=11;viewYear--}if(viewMonth>11){viewMonth=0;viewYear++}renderCalendar();}
+
+function renderSlots(){
+const div=document.getElementById("slots");
+div.innerHTML="";
+if(!selectedDate) return;
+
+slotsByDay[selectedDate.getDay()].forEach(t=>{
+const btn=document.createElement("button");
+btn.textContent=t+" (2h)";
+
+const booked=bookings.find(b=>b.date==selectedDate.toDateString() && b.time==t);
+
+if(booked){btn.className="booked";btn.disabled=true}
+else{
+btn.className="available";
+btn.onclick=()=>{selectedTime=t;document.querySelectorAll(".slots button").forEach(b=>b.style.outline="");btn.style.outline="3px solid #333"}
+}
+
+div.appendChild(btn);
+});
+}
+
+form.onsubmit=function(e){
+e.preventDefault();
+if(!selectedDate||!selectedTime) return alert("Seleziona data e orario");
+
+const booking={
+id:Date.now(),
+date:selectedDate.toDateString(),
+time:selectedTime,
+name:name.value,
+email:email.value,
+shape:shape.value
+};
+
+bookings.push(booking);
+save();
+
+emailjs.send("YOUR_SERVICE_ID","YOUR_TEMPLATE_ID",{
+to_email:"ch776199@gmail.com",
+client_name:booking.name,
+client_email:booking.email,
+day:booking.date,
+time:booking.time,
+shape:booking.shape
+});
+
+msg.textContent="Prenotazione confermata!";
+form.reset();
+selectedTime=null;
+renderSlots();
+};
+
+function loginAdmin(){
+if(adminPass.value===ADMIN_PASSWORD){adminPanel.style.display="block";renderAdmin();}
+else alert("Password errata");
+}
+
+function renderAdmin(){
+bookingList.innerHTML="";
+bookings.forEach(b=>{
+let row=document.createElement("div");
+row.className="booking-item";
+
+let info=document.createElement("span");
+info.textContent=`${b.date} ${b.time} | ${b.name} | ${b.shape}`;
+
+let actions=document.createElement("div");
+actions.className="booking-actions";
+
+let edit=document.createElement("button");
+edit.textContent="Modifica";
+edit.className="edit";
+edit.onclick=()=>editBooking(b.id);
+
+let del=document.createElement("button");
+del.textContent="Elimina";
+del.className="delete";
+del.onclick=()=>deleteBooking(b.id);
+
+actions.appendChild(edit);
+actions.appendChild(del);
+
+row.appendChild(info);
+row.appendChild(actions);
+bookingList.appendChild(row);
+});
+}
+
+function deleteBooking(id){
+if(!confirm("Eliminare prenotazione?")) return;
+bookings=bookings.filter(b=>b.id!==id);
+save();
+renderAdmin();
+renderSlots();
+}
+
+function editBooking(id){
+const b=bookings.find(x=>x.id===id);
+const newName=prompt("Nome",b.name);
+if(newName===null) return;
+const newShape=prompt("Forma (Square/Almond)",b.shape);
+
+b.name=newName;
+b.shape=newShape||b.shape;
+save();
+renderAdmin();
+}
+
+renderCalendar();
+</script>
+</body>
+</html>
